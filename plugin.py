@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 import re
 import subprocess
@@ -157,7 +158,7 @@ original compadd call and outputting matches to stdout.
 class ZshCompletionListener(sublime_plugin.EventListener):
     enabled = True
 
-    def on_query_completions(self, view, prefix, locations):
+    def on_query_completions(self, view: sublime.View, prefix: str, locations: list[sublime.Point]):
         if not self.enabled:
             return None
 
@@ -165,43 +166,53 @@ class ZshCompletionListener(sublime_plugin.EventListener):
         if not view.match_selector(pt, "source.shell - comment - string.quoted"):
             return None
 
-        file_name = view.file_name()
-        cwd = os.path.dirname(file_name) if file_name else None
+        completions_list = sublime.CompletionList(None)
 
-        info = None
-        if os.name == 'nt':
-            info = subprocess.STARTUPINFO()
-            info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            info.wShowWindow = subprocess.SW_HIDE
+        def get_completions():
+            file_name = view.file_name()
+            cwd = os.path.dirname(file_name) if file_name else None
 
-        try:
-            data = subprocess.check_output(
-                executable="zsh",
-                args=ZSH_CAPTURE_COMPLETION + " " + view.substr(view.line(pt)),
-                cwd=cwd,
-                shell=True,
-                startupinfo=info,
-                timeout=4.0
-            )
-            if not data:
-                return None
+            info = None
+            if os.name == 'nt':
+                info = subprocess.STARTUPINFO()
+                info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                info.wShowWindow = subprocess.SW_HIDE
 
-        except subprocess.TimeoutExpired:
-            return None
+            try:
+                data = subprocess.check_output(
+                    executable="zsh",
+                    args=ZSH_CAPTURE_COMPLETION + " " + view.substr(view.line(pt)),
+                    cwd=cwd,
+                    shell=True,
+                    startupinfo=info,
+                    timeout=4.0
+                )
+                if data is None:
+                   data = b''
 
-        except subprocess.SubprocessError:
-            self.enabled = False
-            print("ZSH Completion initialization failed, disabling completions!")
-            return None
+            except subprocess.TimeoutExpired:
+                return
 
-        except FileNotFoundError:
-            self.enabled = False
-            print("ZSH not found, disabling completions!")
-            return None
+            except subprocess.CalledProcessError as e:
+                if e.returncode in (1, 2):
+                    self.enabled = False
+                    print("ZSH Completion initialization failed, disabling completions!")
+                return
 
+            except FileNotFoundError:
+                self.enabled = False
+                print("ZSH not found, disabling completions!")
+                return
+
+            completions_list.set_completions(self.completion_items(data, prefix))
+
+        sublime.set_timeout_async(get_completions)
+        return completions_list
+
+    @staticmethod
+    def completion_items(data, prefix):
+        kind = [sublime.KindId.NAMESPACE, "f", "Filesystem"]
         found = set()
-        completions = []
-
         for line in str(data, encoding="utf-8").split("\r\n"):
             parts = line.split(" -- ", 1)
             word = parts[0]
@@ -212,9 +223,9 @@ class ZshCompletionListener(sublime_plugin.EventListener):
                 continue
             found.add(word)
 
-            if len(parts) > 1:
-                completions.append([word + "\t" + parts[1], word])
-            else:
-                completions.append(word)
-
-        return completions
+            yield sublime.CompletionItem(
+                trigger=word,
+                annotation="ZSH",
+                kind=kind,
+                details=parts[1] if len(parts) > 1 else "file or folder"
+            )
