@@ -155,6 +155,26 @@ original compadd call and outputting matches to stdout.
 """
 
 
+def plugin_loaded():
+    """
+    Generate a list of known words, provided by static completion files
+    of ST's ShellScript package. It contains keywords, built-in commands and
+    variables, which don't need to be provided by this plugin and would
+    otherwise cause duplicates.
+    """
+    global KNOWN_COMPLETIONS
+    KNOWN_COMPLETIONS = set()
+
+    for res in sublime.find_resources("*.sublime-completions"):
+        if res.startswith("Packages/ShellScript/"):
+            data = sublime.decode_value(sublime.load_resource(res))
+            if sublime.score_selector("source.shell.zsh", data["scope"].split(" ", 1)[0]) > 0:
+                for item in data["completions"]:
+                    trigger = item.get("trigger")
+                    if trigger:
+                        KNOWN_COMPLETIONS.add(trigger)
+
+
 class ZshCompletionListener(sublime_plugin.EventListener):
     enabled = True
 
@@ -217,7 +237,7 @@ class ZshCompletionListener(sublime_plugin.EventListener):
             parts = line.split(" -- ", 1)
             word = parts[0]
 
-            if not word.startswith(prefix):
+            if word in KNOWN_COMPLETIONS:
                 continue
             if word in found:
                 continue
