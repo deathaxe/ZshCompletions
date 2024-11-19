@@ -231,7 +231,8 @@ class ZshCompletionListener(sublime_plugin.EventListener):
 
     @staticmethod
     def completion_items(data, prefix):
-        kind = [sublime.KindId.NAMESPACE, "f", "Filesystem"]
+        dir_kind = [sublime.KindId.NAMESPACE, "d", "directory"]
+        file_kind = [sublime.KindId.NAMESPACE, "f", "file"]
         found = set()
         for line in str(data, encoding="utf-8").split("\r\n"):
             parts = line.split(" -- ", 1)
@@ -246,6 +247,6 @@ class ZshCompletionListener(sublime_plugin.EventListener):
             yield sublime.CompletionItem(
                 trigger=word,
                 annotation="ZSH",
-                kind=kind,
-                details=parts[1] if len(parts) > 1 else "file or folder"
+                kind=dir_kind if os.path.isdir(word) else file_kind,
+                details=parts[1] if len(parts) > 1 else " "
             )
