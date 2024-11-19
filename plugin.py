@@ -201,7 +201,7 @@ class ZshCompletionListener(sublime_plugin.EventListener):
             try:
                 data = subprocess.check_output(
                     executable="zsh",
-                    args=ZSH_CAPTURE_COMPLETION + " " + view.substr(view.line(pt)),
+                    args=ZSH_CAPTURE_COMPLETION + " " + view.substr(sublime.Region(view.line(pt).begin(), pt)),
                     cwd=cwd,
                     shell=True,
                     startupinfo=info,
